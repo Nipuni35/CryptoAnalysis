@@ -14,6 +14,10 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import crypto.HeadlessCryptoScanner;
 import crypto.cryslhandler.CrySLModelReader;
 import crypto.exceptions.CryptoAnalysisException;
 
@@ -21,6 +25,7 @@ import crypto.exceptions.CryptoAnalysisException;
 public class CrySLRuleReader {
 	
 	private static CrySLModelReader csmr;
+	private static final Logger LOGGER = LoggerFactory.getLogger(CrySLRuleReader.class);
 	
 	private static CrySLModelReader getReader(){
 		if (csmr == null)
@@ -79,6 +84,7 @@ public class CrySLRuleReader {
 		CrySLModelReader reader = getReader();
 		for (File file : cryptSLFiles) {
 			CrySLRule rule = reader.readRule(file);
+//			LOGGER.info("rule found: {}", rule.getClassName());
 
 			if(rule != null) {
 				if(!ruleMap.containsKey(rule.getClassName())) {
@@ -125,7 +131,9 @@ public class CrySLRuleReader {
 	private static void findCryptSLFiles(File directory, boolean recursive, Collection<File> resultCollection) {
 		for (File file: directory.listFiles())
 		{
+			LOGGER.info("file found : {}", file.getName());
 			if (file.isFile() && file.getName().endsWith(CrySLModelReader.cryslFileEnding))
+				LOGGER.info("file resulted");
 				resultCollection.add(file);
 
 			if (recursive && file.isDirectory())

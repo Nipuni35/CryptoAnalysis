@@ -3,6 +3,10 @@ package crypto.predicates;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.HashSet;
 import java.util.Map.Entry;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Set;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Lists;
@@ -39,6 +43,7 @@ import soot.jimple.Stmt;
 import typestate.TransitionFunction;
 
 public class PredicateHandler {
+	private static final Logger logger = LoggerFactory.getLogger(PredicateHandler.class);
 
 	private final class AddPredicateToOtherSeed implements ResultsHandler {
 		private final Statement statement;
@@ -215,6 +220,7 @@ public class PredicateHandler {
 
 	private void checkMissingRequiredPredicates() {
 		for (AnalysisSeedWithSpecification seed : cryptoScanner.getAnalysisSeeds()) {
+			logger.info("check missing required predicates: {}", seed);
 			Set<ISLConstraint> missingPredicates = seed.getMissingPredicates();
 			for (ISLConstraint pred : missingPredicates) {
 				if (pred instanceof RequiredCrySLPredicate) {

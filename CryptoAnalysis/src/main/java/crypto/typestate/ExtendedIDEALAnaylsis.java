@@ -5,6 +5,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.collect.Maps;
 
 import boomerang.BoomerangOptions;
@@ -17,6 +20,7 @@ import boomerang.jimple.Statement;
 import boomerang.jimple.Val;
 import boomerang.results.ForwardBoomerangResults;
 import crypto.analysis.CrySLResultsReporter;
+import crypto.analysis.CryptoScanner;
 import crypto.analysis.IAnalysisSeed;
 import crypto.boomerang.CogniCryptBoomerangOptions;
 import ideal.IDEALAnalysis;
@@ -38,7 +42,8 @@ public abstract class ExtendedIDEALAnaylsis {
 	private final IDEALAnalysis<TransitionFunction> analysis;
 	private ForwardBoomerangResults<TransitionFunction> results;
 	private HashSet seeds;
-	
+	private static final Logger logger = LoggerFactory.getLogger(ExtendedIDEALAnaylsis.class);
+
 	public ExtendedIDEALAnaylsis(){
 		analysis = new IDEALAnalysis<TransitionFunction>(new IDEALAnalysisDefinition<TransitionFunction>() {
 			@Override
@@ -102,9 +107,12 @@ public abstract class ExtendedIDEALAnaylsis {
 	public abstract CrySLResultsReporter analysisListener();
 
     public Collection<WeightedForwardQuery<TransitionFunction>> computeSeeds(SootMethod method) {
+//    	logger.info("method ext: {}", method);
     	Collection<WeightedForwardQuery<TransitionFunction>> seeds = new HashSet<>();
-        if (!method.hasActiveBody())
+        if (!method.hasActiveBody()) {
+//        	logger.info("No active body found");
             return seeds;
+        }
         for (Unit u : method.getActiveBody().getUnits()) {
             seeds.addAll( getOrCreateTypestateChangeFunction().generateSeed(method, u));
         }

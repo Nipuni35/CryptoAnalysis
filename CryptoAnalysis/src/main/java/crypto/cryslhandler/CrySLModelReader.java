@@ -28,6 +28,8 @@ import org.eclipse.xtext.common.types.JvmFormalParameter;
 import org.eclipse.xtext.common.types.access.impl.ClasspathTypeProvider;
 import org.eclipse.xtext.resource.XtextResource;
 import org.eclipse.xtext.resource.XtextResourceSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,6 +42,8 @@ import java.util.*;
 import java.util.Map.Entry;
 
 public class CrySLModelReader {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(CrySLModelReader.class);
 
 	private List<CrySLForbiddenMethod> forbiddenMethods = null;
 	private StateMachineGraph smg = null;
@@ -54,6 +58,7 @@ public class CrySLModelReader {
 
 	/**
 	 * Creates a CrySLModelReader
+	 * 
 	 * @throws MalformedURLException
 	 */
 	public CrySLModelReader() throws MalformedURLException {
@@ -77,22 +82,26 @@ public class CrySLModelReader {
 	}
 
 	/**
-	 * Reads the content of a CrySL file from an {@link InputStream}, afterwards the {@link CrySLRule} will be created.
+	 * Reads the content of a CrySL file from an {@link InputStream}, afterwards the
+	 * {@link CrySLRule} will be created.
 	 *
-	 * @param stream the {@link InputStream} holds the CrySL file content
-	 * @param virtualFileName the name needs following structure [HexHashedAbsoluteZipFilePath][SystemFileSeparator][ZipEntryName]
+	 * @param stream          the {@link InputStream} holds the CrySL file content
+	 * @param virtualFileName the name needs following structure
+	 *                        [HexHashedAbsoluteZipFilePath][SystemFileSeparator][ZipEntryName]
 	 * @return the {@link CrySLRule}
 	 * @throws IllegalArgumentException, IOException
 	 * @throws CryptoAnalysisException
 	 */
-	public CrySLRule readRule(InputStream stream, String virtualFileName) throws IllegalArgumentException, IOException, CryptoAnalysisException{
+	public CrySLRule readRule(InputStream stream, String virtualFileName)
+			throws IllegalArgumentException, IOException, CryptoAnalysisException {
 		if (!virtualFileName.endsWith(cryslFileEnding)) {
-			throw new CryptoAnalysisException ("The prefix of "+virtualFileName+" does not correspond to "+cryslFileEnding);
+			throw new CryptoAnalysisException(
+					"The prefix of " + virtualFileName + " does not correspond to " + cryslFileEnding);
 		}
 
 		URI uri = URI.createURI(virtualFileName);
-		Resource resource= resourceSet.getURIResourceMap().get(uri);
-		if (resource == null){
+		Resource resource = resourceSet.getURIResourceMap().get(uri);
+		if (resource == null) {
 			resource = resourceSet.createResource(uri);
 			resource.load(stream, Collections.EMPTY_MAP);
 		}
@@ -111,7 +120,8 @@ public class CrySLModelReader {
 		final String fileName = ruleFile.getName();
 
 		// Re-included this code because cryslFileEnding is dotted ".crysl".
-		// And because this is a public constant, I'm scared to change it, as it may cause massive versioning problems.
+		// And because this is a public constant, I'm scared to change it, as it may
+		// cause massive versioning problems.
 		final String extension = fileName.substring(fileName.lastIndexOf("."));
 		if (!cryslFileEnding.equals(extension)) {
 			if (!fileName.endsWith(cryslFileEnding))
@@ -119,10 +129,14 @@ public class CrySLModelReader {
 		}
 
 		if (!extension.equals(cryslFileEnding)) {
-			throw new CryptoAnalysisException("The prefix of "+ fileName + "  does not correspond to "+ cryslFileEnding);
+			throw new CryptoAnalysisException(
+					"The prefix of " + fileName + "  does not correspond to " + cryslFileEnding);
 		}
 
-		final Resource resource = resourceSet.getResource(URI.createFileURI(ruleFile.getAbsolutePath()), true);// URI.createPlatformResourceURI(ruleFile.getFullPath().toPortableString(), // true), true);
+		final Resource resource = resourceSet.getResource(URI.createFileURI(ruleFile.getAbsolutePath()), true);// URI.createPlatformResourceURI(ruleFile.getFullPath().toPortableString(),
+																												// //
+																												// true),
+																												// true);
 		return createRuleFromResource(resource);
 	}
 
@@ -133,7 +147,7 @@ public class CrySLModelReader {
 		final EObject eObject = resource.getContents().get(0);
 		final Domainmodel dm = (Domainmodel) eObject;
 		String curClass = dm.getJavaType().getQualifiedName();
-		final RequiredBlock events = dm.getReq_events(); 
+		final RequiredBlock events = dm.getReq_events();
 		final EnsuresBlock ensure = dm.getEnsure();
 		final Map<ParEqualsPredicate, SuperType> pre_preds = Maps.newHashMap();
 		final DestroysBlock destroys = dm.getDestroy();
@@ -151,10 +165,14 @@ public class CrySLModelReader {
 
 		this.smg = (new StateMachineGraphBuilder(order, events)).buildSMG();
 		final ForbiddenBlock forbEvent = dm.getForbEvent();
-		this.forbiddenMethods = (forbEvent != null) ? getForbiddenMethods(forbEvent.getForb_methods()) : Lists.newArrayList();
+		this.forbiddenMethods = (forbEvent != null) ? getForbiddenMethods(forbEvent.getForb_methods())
+				: Lists.newArrayList();
 
-		final List<ISLConstraint> constraints = (dm.getReqConstraints() != null) ? buildUpConstraints(dm.getReqConstraints().getReq()) : Lists.newArrayList();
-		constraints.addAll(((dm.getRequire() != null) ? collectRequiredPredicates(dm.getRequire().getPred()) : Lists.newArrayList()));
+		final List<ISLConstraint> constraints = (dm.getReqConstraints() != null)
+				? buildUpConstraints(dm.getReqConstraints().getReq())
+				: Lists.newArrayList();
+		constraints.addAll(((dm.getRequire() != null) ? collectRequiredPredicates(dm.getRequire().getPred())
+				: Lists.newArrayList()));
 		final List<Entry<String, String>> objects = getObjects(dm.getUsage());
 		final List<CrySLPredicate> actPreds = Lists.newArrayList();
 
@@ -163,8 +181,9 @@ public class CrySLModelReader {
 			if (cond == null) {
 				actPreds.add(pred.tobasicPredicate());
 			} else {
-				actPreds.add(new CrySLCondPredicate(pred.getBaseObject(), pred.getPredName(), pred.getParameters(), pred.isNegated(),
-						getStatesForMethods(CryslReaderUtils.resolveAggregateToMethodeNames(cond)), pred.getConstraint()));
+				actPreds.add(new CrySLCondPredicate(pred.getBaseObject(), pred.getPredName(), pred.getParameters(),
+						pred.isNegated(), getStatesForMethods(CryslReaderUtils.resolveAggregateToMethodeNames(cond)),
+						pred.getConstraint()));
 			}
 		}
 		return new CrySLRule(curClass, objects, this.forbiddenMethods, this.smg, constraints, actPreds);
@@ -189,7 +208,8 @@ public class CrySLModelReader {
 							if (lab instanceof SuperType) {
 								collected.add(((SuperType) lab).getName());
 							} else {
-								throw new ClassCastException("Parser error in the line after definition of label " + collected.get(collected.size() - 1));
+								throw new ClassCastException("Parser error in the line after definition of label "
+										+ collected.get(collected.size() - 1));
 							}
 						}
 					} else {
@@ -212,7 +232,8 @@ public class CrySLModelReader {
 				boolean firstPar = true;
 				for (final SuPar var : pred.getParList().getParameters()) {
 					if (var.getVal() != null) {
-						final ObjectImpl object = (ObjectImpl) ((LiteralExpression) var.getVal().getLit().getName()).getValue();
+						final ObjectImpl object = (ObjectImpl) ((LiteralExpression) var.getVal().getLit().getName())
+								.getValue();
 						String name = object.getName();
 						String type = ((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName();
 						if (name == null) {
@@ -253,7 +274,8 @@ public class CrySLModelReader {
 				boolean firstPar = true;
 				for (final SuPar var : pred.getParList().getParameters()) {
 					if (var.getVal() != null) {
-						final ObjectImpl object = (ObjectImpl) ((LiteralExpression) var.getVal().getLit().getName()).getValue();
+						final ObjectImpl object = (ObjectImpl) ((LiteralExpression) var.getVal().getLit().getName())
+								.getValue();
 						String type = ((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName();
 						String name = object.getName();
 						if (name == null) {
@@ -309,13 +331,15 @@ public class CrySLModelReader {
 			if ("+".equals(op)) {
 				operator = ArithOp.p;
 			}
-			ObjectDecl leftObj =
-					(ObjectDecl) ((ObjectImpl) ((LiteralExpression) ((LiteralExpression) ((LiteralExpression) ae.getLeftExpression()).getCons()).getName()).getValue()).eContainer();
-			CrySLObject leftSide = new CrySLObject(leftObj.getObjectName().getName(), leftObj.getObjectType().getQualifiedName());
+			ObjectDecl leftObj = (ObjectDecl) ((ObjectImpl) ((LiteralExpression) ((LiteralExpression) ((LiteralExpression) ae
+					.getLeftExpression()).getCons()).getName()).getValue()).eContainer();
+			CrySLObject leftSide = new CrySLObject(leftObj.getObjectName().getName(),
+					leftObj.getObjectType().getQualifiedName());
 
-			ObjectDecl rightObj =
-					(ObjectDecl) ((ObjectImpl) ((LiteralExpression) ((LiteralExpression) ((LiteralExpression) ae.getRightExpression()).getCons()).getName()).getValue()).eContainer();
-			CrySLObject rightSide = new CrySLObject(rightObj.getObjectName().getName(), rightObj.getObjectType().getQualifiedName());
+			ObjectDecl rightObj = (ObjectDecl) ((ObjectImpl) ((LiteralExpression) ((LiteralExpression) ((LiteralExpression) ae
+					.getRightExpression()).getCons()).getName()).getValue()).eContainer();
+			CrySLObject rightSide = new CrySLObject(rightObj.getObjectName().getName(),
+					rightObj.getObjectType().getQualifiedName());
 
 			slci = new CrySLArithmeticConstraint(leftSide, rightSide, operator);
 		} else if (cons instanceof LiteralExpression) {
@@ -331,40 +355,49 @@ public class CrySLModelReader {
 			} else {
 				final String part = ((ArrayElements) lit.getCons()).getCons().getPart();
 				if (part != null) {
-					final LiteralExpression name = (LiteralExpression) ((ArrayElements) lit.getCons()).getCons().getLit().getName();
+					final LiteralExpression name = (LiteralExpression) ((ArrayElements) lit.getCons()).getCons()
+							.getLit().getName();
 					final SuperType object = name.getValue();
-					final CrySLObject variable = new CrySLObject(object.getName(), ((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName(),
-							new CrySLSplitter(Integer.parseInt(((ArrayElements) lit.getCons()).getCons().getInd()), filterQuotes(((ArrayElements) lit.getCons()).getCons().getSplit())));
+					final CrySLObject variable = new CrySLObject(object.getName(),
+							((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName(),
+							new CrySLSplitter(Integer.parseInt(((ArrayElements) lit.getCons()).getCons().getInd()),
+									filterQuotes(((ArrayElements) lit.getCons()).getCons().getSplit())));
 					slci = new CrySLValueConstraint(variable, parList);
 				} else {
 					final String consPred = ((ArrayElements) lit.getCons()).getCons().getConsPred();
 					if (consPred != null) {
-						final LiteralExpression name = (LiteralExpression) ((ArrayElements) lit.getCons()).getCons().getLit().getName();
+						final LiteralExpression name = (LiteralExpression) ((ArrayElements) lit.getCons()).getCons()
+								.getLit().getName();
 						final SuperType object = name.getValue();
 						int ind;
 						if (consPred.equals("alg(")) {
 							ind = 0;
-							final CrySLObject variable =
-									new CrySLObject(object.getName(), ((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName(), new CrySLSplitter(ind, filterQuotes("/")));
+							final CrySLObject variable = new CrySLObject(object.getName(),
+									((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName(),
+									new CrySLSplitter(ind, filterQuotes("/")));
 							slci = new CrySLValueConstraint(variable, parList);
 						} else if (consPred.equals("mode(")) {
 							ind = 1;
-							final CrySLObject variable =
-									new CrySLObject(object.getName(), ((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName(), new CrySLSplitter(ind, filterQuotes("/")));
+							final CrySLObject variable = new CrySLObject(object.getName(),
+									((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName(),
+									new CrySLSplitter(ind, filterQuotes("/")));
 							slci = new CrySLValueConstraint(variable, parList);
 						} else if (consPred.equals("pad(")) {
 							ind = 2;
-							final CrySLObject variable =
-									new CrySLObject(object.getName(), ((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName(), new CrySLSplitter(ind, filterQuotes("/")));
+							final CrySLObject variable = new CrySLObject(object.getName(),
+									((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName(),
+									new CrySLSplitter(ind, filterQuotes("/")));
 							slci = new CrySLValueConstraint(variable, parList);
 						}
 					} else {
-						LiteralExpression name = (LiteralExpression) ((ArrayElements) lit.getCons()).getCons().getName();
+						LiteralExpression name = (LiteralExpression) ((ArrayElements) lit.getCons()).getCons()
+								.getName();
 						if (name == null) {
 							name = (LiteralExpression) ((ArrayElements) lit.getCons()).getCons().getLit().getName();
 						}
 						final SuperType object = name.getValue();
-						final CrySLObject variable = new CrySLObject(object.getName(), ((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName());
+						final CrySLObject variable = new CrySLObject(object.getName(),
+								((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName());
 						slci = new CrySLValueConstraint(variable, parList);
 					}
 				}
@@ -373,23 +406,23 @@ public class CrySLModelReader {
 			final ComparisonExpression comp = (ComparisonExpression) cons;
 			CompOp op = null;
 			switch ((new CrySLComparisonOperator((ComparingOperator) comp.getOperator())).toString()) {
-				case ">":
-					op = CompOp.g;
-					break;
-				case "<":
-					op = CompOp.l;
-					break;
-				case ">=":
-					op = CompOp.ge;
-					break;
-				case "<=":
-					op = CompOp.le;
-					break;
-				case "!=":
-					op = CompOp.neq;
-					break;
-				default:
-					op = CompOp.eq;
+			case ">":
+				op = CompOp.g;
+				break;
+			case "<":
+				op = CompOp.l;
+				break;
+			case ">=":
+				op = CompOp.ge;
+				break;
+			case "<=":
+				op = CompOp.le;
+				break;
+			case "!=":
+				op = CompOp.neq;
+				break;
+			default:
+				op = CompOp.eq;
 			}
 			CrySLArithmeticConstraint left;
 			CrySLArithmeticConstraint right;
@@ -439,18 +472,19 @@ public class CrySLModelReader {
 				op = LogOps.implies;
 			} else {
 				switch ((new CrySLLogicalOperator((LogicalOperator) operator)).toString()) {
-					case "&&":
-						op = LogOps.and;
-						break;
-					case "||":
-						op = LogOps.or;
-						break;
-					default:
-						System.err.println("Sign " + operator.toString() + " was not properly translated.");
-						op = LogOps.and;
+				case "&&":
+					op = LogOps.and;
+					break;
+				case "||":
+					op = LogOps.or;
+					break;
+				default:
+					System.err.println("Sign " + operator.toString() + " was not properly translated.");
+					op = LogOps.and;
 				}
 			}
-			slci = new CrySLConstraint(getConstraint(cons.getLeftExpression()), getConstraint(cons.getRightExpression()), op);
+			slci = new CrySLConstraint(getConstraint(cons.getLeftExpression()),
+					getConstraint(cons.getRightExpression()), op);
 		}
 
 		return slci;
@@ -471,7 +505,9 @@ public class CrySLModelReader {
 				crysl.addAll(CryslReaderUtils.resolveAggregateToMethodeNames(alternative));
 			}
 			methodSignatures.add(new CrySLForbiddenMethod(
-					new CrySLMethod(meth.getDeclaringType().getIdentifier() + "." + meth.getSimpleName(), pars, null, new SimpleEntry<>(UNDERSCORE, ANY_TYPE)), false, crysl));
+					new CrySLMethod(meth.getDeclaringType().getIdentifier() + "." + meth.getSimpleName(), pars, null,
+							new SimpleEntry<>(UNDERSCORE, ANY_TYPE)),
+					false, crysl));
 		}
 		return methodSignatures;
 	}
@@ -525,7 +561,8 @@ public class CrySLModelReader {
 		if (condMethods.size() != 0) {
 			for (final TransitionEdge methTrans : this.smg.getAllTransitions()) {
 				final List<CrySLMethod> transLabel = methTrans.getLabel();
-				if (transLabel.size() > 0 && (transLabel.equals(condMethods) || (condMethods.size() == 1 && transLabel.contains(condMethods.get(0))))) {
+				if (transLabel.size() > 0 && (transLabel.equals(condMethods)
+						|| (condMethods.size() == 1 && transLabel.contains(condMethods.get(0))))) {
 					predGens.add(methTrans.getRight());
 				}
 			}
@@ -537,54 +574,60 @@ public class CrySLModelReader {
 		final String pred = ((PreDefinedPredicates) lit.getCons()).getPredName();
 		ISLConstraint slci = null;
 		switch (pred) {
-			case "callTo":
-				final List<ICrySLPredicateParameter> methodsToBeCalled = new ArrayList<>();
-				methodsToBeCalled.addAll(CryslReaderUtils.resolveAggregateToMethodeNames(((PreDefinedPredicates) lit.getCons()).getObj().get(0)));
-				slci = new CrySLPredicate(null, pred, methodsToBeCalled, false);
-				break;
-			case "noCallTo":
-				final List<ICrySLPredicateParameter> methodsNotToBeCalled = new ArrayList<>();
-				final List<CrySLMethod> resolvedMethodNames = CryslReaderUtils.resolveAggregateToMethodeNames(((PreDefinedPredicates) lit.getCons()).getObj().get(0));
-				for (final CrySLMethod csm : resolvedMethodNames) {
-					this.forbiddenMethods.add(new CrySLForbiddenMethod(csm, true));
-					methodsNotToBeCalled.add(csm);
-				}
-				slci = new CrySLPredicate(null, pred, methodsNotToBeCalled, false);
-				break;
-			case "neverTypeOf":
-				final List<ICrySLPredicateParameter> varNType = new ArrayList<>();
-				final Object object = (de.darmstadt.tu.crossing.crySL.Object) ((PreDefinedPredicates) lit.getCons()).getObj().get(0);
-				final String type = ((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName();
-				varNType.add(new CrySLObject(object.getName(), type));
-				final String qualifiedName = ((PreDefinedPredicates) lit.getCons()).getType().getType().getQualifiedName();
-				varNType.add(new CrySLObject(qualifiedName, NULL));
-				slci = new CrySLPredicate(null, pred, varNType, false);
-				break;
-			case "length":
-				final List<ICrySLPredicateParameter> variables = new ArrayList<>();
-				final Object objectL = (de.darmstadt.tu.crossing.crySL.Object) ((PreDefinedPredicates) lit.getCons()).getObj().get(0);
-				final String typeL = ((ObjectDecl) objectL.eContainer()).getObjectType().getQualifiedName();
-				variables.add(new CrySLObject(objectL.getName(), typeL));
-				slci = new CrySLPredicate(null, pred, variables, false);
-				break;
-			case "notHardCoded":
-				final List<ICrySLPredicateParameter> variables1 = new ArrayList<>();
-				final Object objectL1 = (de.darmstadt.tu.crossing.crySL.Object) ((PreDefinedPredicates) lit.getCons()).getObj().get(0);
-				final String typeL1 = ((ObjectDecl) objectL1.eContainer()).getObjectType().getQualifiedName();
-				variables1.add(new CrySLObject(objectL1.getName(), typeL1));
-				slci = new CrySLPredicate(null, pred, variables1, false);
-				break;
-			case "instanceOf":
-				final List<ICrySLPredicateParameter> varInstOf = new ArrayList<>();
-				final Object objInstOf = (de.darmstadt.tu.crossing.crySL.Object) ((PreDefinedPredicates) lit.getCons()).getObj().get(0);
-				final String instOfType = ((ObjectDecl) objInstOf.eContainer()).getObjectType().getQualifiedName();
-				varInstOf.add(new CrySLObject(objInstOf.getName(), instOfType));
-				final String typeName = ((PreDefinedPredicates) lit.getCons()).getType().getType().getQualifiedName();
-				varInstOf.add(new CrySLObject(typeName, NULL));
-				slci = new CrySLPredicate(null, pred, varInstOf, false);
-				break;
-			default:
-				new RuntimeException();
+		case "callTo":
+			final List<ICrySLPredicateParameter> methodsToBeCalled = new ArrayList<>();
+			methodsToBeCalled.addAll(CryslReaderUtils
+					.resolveAggregateToMethodeNames(((PreDefinedPredicates) lit.getCons()).getObj().get(0)));
+			slci = new CrySLPredicate(null, pred, methodsToBeCalled, false);
+			break;
+		case "noCallTo":
+			final List<ICrySLPredicateParameter> methodsNotToBeCalled = new ArrayList<>();
+			final List<CrySLMethod> resolvedMethodNames = CryslReaderUtils
+					.resolveAggregateToMethodeNames(((PreDefinedPredicates) lit.getCons()).getObj().get(0));
+			for (final CrySLMethod csm : resolvedMethodNames) {
+				this.forbiddenMethods.add(new CrySLForbiddenMethod(csm, true));
+				methodsNotToBeCalled.add(csm);
+			}
+			slci = new CrySLPredicate(null, pred, methodsNotToBeCalled, false);
+			break;
+		case "neverTypeOf":
+			final List<ICrySLPredicateParameter> varNType = new ArrayList<>();
+			final Object object = (de.darmstadt.tu.crossing.crySL.Object) ((PreDefinedPredicates) lit.getCons())
+					.getObj().get(0);
+			final String type = ((ObjectDecl) object.eContainer()).getObjectType().getQualifiedName();
+			varNType.add(new CrySLObject(object.getName(), type));
+			final String qualifiedName = ((PreDefinedPredicates) lit.getCons()).getType().getType().getQualifiedName();
+			varNType.add(new CrySLObject(qualifiedName, NULL));
+			slci = new CrySLPredicate(null, pred, varNType, false);
+			break;
+		case "length":
+			final List<ICrySLPredicateParameter> variables = new ArrayList<>();
+			final Object objectL = (de.darmstadt.tu.crossing.crySL.Object) ((PreDefinedPredicates) lit.getCons())
+					.getObj().get(0);
+			final String typeL = ((ObjectDecl) objectL.eContainer()).getObjectType().getQualifiedName();
+			variables.add(new CrySLObject(objectL.getName(), typeL));
+			slci = new CrySLPredicate(null, pred, variables, false);
+			break;
+		case "notHardCoded":
+			final List<ICrySLPredicateParameter> variables1 = new ArrayList<>();
+			final Object objectL1 = (de.darmstadt.tu.crossing.crySL.Object) ((PreDefinedPredicates) lit.getCons())
+					.getObj().get(0);
+			final String typeL1 = ((ObjectDecl) objectL1.eContainer()).getObjectType().getQualifiedName();
+			variables1.add(new CrySLObject(objectL1.getName(), typeL1));
+			slci = new CrySLPredicate(null, pred, variables1, false);
+			break;
+		case "instanceOf":
+			final List<ICrySLPredicateParameter> varInstOf = new ArrayList<>();
+			final Object objInstOf = (de.darmstadt.tu.crossing.crySL.Object) ((PreDefinedPredicates) lit.getCons())
+					.getObj().get(0);
+			final String instOfType = ((ObjectDecl) objInstOf.eContainer()).getObjectType().getQualifiedName();
+			varInstOf.add(new CrySLObject(objInstOf.getName(), instOfType));
+			final String typeName = ((PreDefinedPredicates) lit.getCons()).getType().getType().getQualifiedName();
+			varInstOf.add(new CrySLObject(typeName, NULL));
+			slci = new CrySLPredicate(null, pred, varInstOf, false);
+			break;
+		default:
+			new RuntimeException();
 		}
 		return slci;
 	}
@@ -598,13 +641,16 @@ public class CrySLModelReader {
 			final EObject constraint = cons.getName();
 			final String object = getValueOfLiteral(constraint);
 			if (constraint instanceof LiteralExpression) {
-				name = new CrySLObject(object, ((ObjectDecl) ((ObjectImpl) ((LiteralExpression) constraint).getValue()).eContainer()).getObjectType().getQualifiedName());
+				name = new CrySLObject(object,
+						((ObjectDecl) ((ObjectImpl) ((LiteralExpression) constraint).getValue()).eContainer())
+								.getObjectType().getQualifiedName());
 			} else {
 				name = new CrySLObject(object, INT);
 			}
 		}
 
-		return new CrySLArithmeticConstraint(name, new CrySLObject("0", INT), crypto.rules.CrySLArithmeticConstraint.ArithOp.p);
+		return new CrySLArithmeticConstraint(name, new CrySLObject("0", INT),
+				crypto.rules.CrySLArithmeticConstraint.ArithOp.p);
 	}
 
 	private CrySLArithmeticConstraint convertArithExpressionToArithmeticConstraint(final Constraint expression) {
@@ -616,20 +662,21 @@ public class CrySLModelReader {
 		final CrySLArithmeticOperator aop = new CrySLArithmeticOperator((ArithmeticOperator) ar.getOperator());
 		ArithOp operator = null;
 		switch (aop.toString()) {
-			case "+":
-				operator = ArithOp.p;
-				break;
-			case "-":
-				operator = ArithOp.n;
-				break;
-			case "%":
-				operator = ArithOp.m;
-				break;
-			default:
-				operator = ArithOp.p;
+		case "+":
+			operator = ArithOp.p;
+			break;
+		case "-":
+			operator = ArithOp.n;
+			break;
+		case "%":
+			operator = ArithOp.m;
+			break;
+		default:
+			operator = ArithOp.p;
 		}
 
-		right = new CrySLArithmeticConstraint(new CrySLObject(leftValue, getTypeName(ar.getLeftExpression(), leftValue)),
+		right = new CrySLArithmeticConstraint(
+				new CrySLObject(leftValue, getTypeName(ar.getLeftExpression(), leftValue)),
 				new CrySLObject(rightValue, getTypeName(ar.getRightExpression(), rightValue)), operator);
 		return right;
 	}
@@ -653,20 +700,24 @@ public class CrySLModelReader {
 					final String variable = object.getName();
 					final String part = var.getVal().getPart();
 					if (part != null) {
-						variables.add(new CrySLObject(variable, type, new CrySLSplitter(Integer.parseInt(lit.getInd()), filterQuotes(lit.getSplit()))));
+						variables.add(new CrySLObject(variable, type,
+								new CrySLSplitter(Integer.parseInt(lit.getInd()), filterQuotes(lit.getSplit()))));
 					} else {
 						final String consPred = var.getVal().getConsPred();
 						int ind;
 						if (consPred != null) {
 							if (consPred.equals("alg(")) {
 								ind = 0;
-								variables.add(new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
+								variables.add(
+										new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
 							} else if (consPred.equals("mode(")) {
 								ind = 1;
-								variables.add(new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
+								variables.add(
+										new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
 							} else if (consPred.equals("pad(")) {
 								ind = 2;
-								variables.add(new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
+								variables.add(
+										new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
 							}
 						} else {
 							variables.add(new CrySLObject(variable, type));
@@ -677,7 +728,8 @@ public class CrySLModelReader {
 				}
 			}
 		}
-		return new CrySLPredicate(null, innerPred.getPred().getPredName(), variables, (innerPred.getNot() != null ? true : false), conditional);
+		return new CrySLPredicate(null, innerPred.getPred().getPredName(), variables,
+				(innerPred.getNot() != null ? true : false), conditional);
 	}
 
 	private ISLConstraint getPredicate(Pred pred) {
@@ -691,20 +743,24 @@ public class CrySLModelReader {
 					final String variable = object.getName();
 					final String part = var.getVal().getPart();
 					if (part != null) {
-						variables.add(new CrySLObject(variable, type, new CrySLSplitter(Integer.parseInt(lit.getInd()), filterQuotes(lit.getSplit()))));
+						variables.add(new CrySLObject(variable, type,
+								new CrySLSplitter(Integer.parseInt(lit.getInd()), filterQuotes(lit.getSplit()))));
 					} else {
 						final String consPred = var.getVal().getConsPred();
 						int ind;
 						if (consPred != null) {
 							if (consPred.equals("alg(")) {
 								ind = 0;
-								variables.add(new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
+								variables.add(
+										new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
 							} else if (consPred.equals("mode(")) {
 								ind = 1;
-								variables.add(new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
+								variables.add(
+										new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
 							} else if (consPred.equals("pad(")) {
 								ind = 2;
-								variables.add(new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
+								variables.add(
+										new CrySLObject(variable, type, new CrySLSplitter(ind, filterQuotes("/"))));
 							}
 						} else {
 							variables.add(new CrySLObject(variable, type));
@@ -715,7 +771,8 @@ public class CrySLModelReader {
 				}
 			}
 		}
-		return new CrySLPredicate(null, pred.getPredName(), variables, (((PredLit)pred.eContainer()).getNot() != null ? true : false), null);
+		return new CrySLPredicate(null, pred.getPredName(), variables,
+				(((PredLit) pred.eContainer()).getNot() != null ? true : false), null);
 	}
 
 	private String getValueOfLiteral(final EObject name) {
@@ -744,8 +801,8 @@ public class CrySLModelReader {
 			Integer.parseInt(value);
 			typeName = "int";
 		} catch (NumberFormatException ex) {
-			typeName = ((ObjectDecl) ((LiteralExpression) ((LiteralExpression) ((LiteralExpression) constraint).getCons()).getName()).getValue().eContainer()).getObjectType()
-					.getQualifiedName();
+			typeName = ((ObjectDecl) ((LiteralExpression) ((LiteralExpression) ((LiteralExpression) constraint)
+					.getCons()).getName()).getValue().eContainer()).getObjectType().getQualifiedName();
 		}
 		return typeName;
 	}

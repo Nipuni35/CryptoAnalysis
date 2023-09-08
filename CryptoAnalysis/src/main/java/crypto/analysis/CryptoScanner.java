@@ -94,6 +94,7 @@ public abstract class CryptoScanner {
 		predicateHandler.checkPredicates();
 
 		for (AnalysisSeedWithSpecification seed : getAnalysisSeeds()) {
+			logger.info("seed analysis : {}", seed);
 			if (seed.isSecure()) {
 				listener.onSecureObjectFound(seed);
 			}
@@ -121,12 +122,15 @@ public abstract class CryptoScanner {
 	}
 
 	private void initialize() {
+		logger.info("initialize method");
 		ReachableMethods rm = Scene.v().getReachableMethods();
 		QueueReader<MethodOrMethodContext> listener = rm.listener();
 		while (listener.hasNext()) {
 			MethodOrMethodContext next = listener.next();
 			SootMethod method = next.method();
+//			logger.info("soot method :{}", method);
 			if (method == null || !method.hasActiveBody() || !method.getDeclaringClass().isApplicationClass()) {
+//				logger.info("reached continue");
 				continue;
 			}
 			for (ClassSpecification spec : getClassSpecifictions()) {
@@ -134,7 +138,13 @@ public abstract class CryptoScanner {
 				if (spec.getRule().getClassName().equals("javax.crypto.SecretKey")) {
 					continue;
 				}
+//				logger.info("method : {}", spec.getInitialSeeds(method));
 				for (Query seed : spec.getInitialSeeds(method)) {
+					//matched methods have been filtered
+//					logger.info("query seed : {}", seed);
+//					logger.info("query seed stmt : {}", seed.stmt());
+//					logger.info("query seed var: {}", seed.var());
+					logger.info("query spec : {}", spec);
 					getOrCreateSeedWithSpec(new AnalysisSeedWithSpecification(this, seed.stmt(), seed.var(), spec));
 				}
 			}
@@ -151,6 +161,8 @@ public abstract class CryptoScanner {
 
 	public AnalysisSeedWithEnsuredPredicate getOrCreateSeed(Node<Statement,Val> factAtStatement) {
 		boolean addToWorklist = false;
+//		logger.info("factAtStatement : {}", factAtStatement.stmt());
+
 		if (!seedsWithoutSpec.containsKey(factAtStatement))
 			addToWorklist = true;
 
@@ -162,6 +174,9 @@ public abstract class CryptoScanner {
 
 	public AnalysisSeedWithSpecification getOrCreateSeedWithSpec(AnalysisSeedWithSpecification factAtStatement) {
 		boolean addToWorklist = false;
+//		logger.info("factAtStatement : {}", factAtStatement.getMethod());
+//		logger.info("seedsWithSPec keys :{}", seedsWithSpec.keySet());
+
 		if (!seedsWithSpec.containsKey(factAtStatement))
 			addToWorklist = true;
 		AnalysisSeedWithSpecification seed = seedsWithSpec.getOrCreate(factAtStatement);

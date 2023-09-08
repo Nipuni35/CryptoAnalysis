@@ -71,6 +71,7 @@ public class CrySLMethodToSootMethod {
 			classes.addAll(getFullHierarchyOf(sootClass));
 		}
 		int noOfParams = label.getParameters().size(); 
+		LOGGER.info("received classes : {}", classes);
 		for(SootClass c : classes) {
 			for (SootMethod m : c.getMethods()) {
 				if (m.getName().equals(methodNameWithoutDeclaringClass) && m.getParameterCount() == noOfParams) {

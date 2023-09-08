@@ -317,6 +317,8 @@ public abstract class HeadlessCryptoScanner {
 		// JAVA VERSION 9 && IS A CLASSPATH PROJECT
 		else if(getJavaVersion() >= 9 && !isModularProject())
 		{
+			LOGGER.info("project has java version greater than 9 and it is a class path project!");
+			LOGGER.info("VIRTUAL_FS_FOR_JDK" + File.pathSeparator + sootClassPath());
 			Options.v().set_soot_classpath("VIRTUAL_FS_FOR_JDK" + File.pathSeparator + sootClassPath());
 		}
 		// JAVA VERSION 9 && IS A MODULEPATH PROJECT
@@ -325,6 +327,7 @@ public abstract class HeadlessCryptoScanner {
 			Options.v().set_prepend_classpath(true);
 			Options.v().set_soot_modulepath(sootClassPath());
 		}
+		LOGGER.info("application class path : " + applicationClassPath());
 		Options.v().set_process_dir(Arrays.asList(applicationClassPath().split(File.pathSeparator)));
 		Options.v().set_include(getIncludeList());
 		Options.v().set_exclude(getExcludeList());

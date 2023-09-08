@@ -9,6 +9,10 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -26,6 +30,7 @@ import crypto.analysis.errors.IncompleteOperationError;
 import crypto.analysis.errors.TypestateError;
 import crypto.constraints.ConstraintSolver;
 import crypto.constraints.ConstraintSolver.EvaluableConstraint;
+import crypto.cryslhandler.CrySLModelReader;
 import crypto.extractparameter.CallSiteWithParamIndex;
 import crypto.extractparameter.ExtractParameterAnalysis;
 import crypto.extractparameter.ExtractedValue;
@@ -79,6 +84,8 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	private ExtractParameterAnalysis parameterAnalysis;
 	private Set<ResultsHandler> resultHandlers = Sets.newHashSet();
 	private boolean secure = true;
+	private static final Logger LOGGER = LoggerFactory.getLogger(AnalysisSeedWithSpecification.class);
+
 
 	public AnalysisSeedWithSpecification(CryptoScanner cryptoScanner, Statement stmt, Val val, ClassSpecification spec) {
 		super(cryptoScanner, stmt, val, spec.getFSM().getInitialWeight(stmt));
@@ -131,7 +138,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				predicateHandler.addNewPred(this, c.getRowKey(), c.getColumnKey(), pred);
 			}
 		}
-
+		LOGGER.info("computeTypestateErrorUnits");
 		computeTypestateErrorUnits();
 		computeTypestateErrorsForEndOfObjectLifeTime();
 
@@ -171,6 +178,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	}
 
 	private void computeTypestateErrorUnits() {
+		LOGGER.info("computeTypestateErrorUnits started");
 		Set<Statement> allTypestateChangeStatements = Sets.newHashSet();
 		for (Cell<Statement, Val, TransitionFunction> c : results.asStatementValWeightTable().cellSet()) {
 			allTypestateChangeStatements.addAll(c.getValue().getLastStateChangeStatements());
@@ -180,6 +188,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			if (allTypestateChangeStatements.contains(curr)) {
 				Collection<? extends State> targetStates = getTargetStates(c.getValue());
 				for (State newStateAtCurr : targetStates) {
+					LOGGER.info("newStateAtCurr : {}", newStateAtCurr);
 					typeStateChangeAtStatement(curr, newStateAtCurr);
 				}
 			}
@@ -218,6 +227,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	}
 
 	private void typeStateChangeAtStatement(Statement curr, State stateNode) {
+		LOGGER.info("typeStateChangeAtStatement started :{}", curr);
 		if (typeStateChange.put(curr, stateNode)) {
 			if (stateNode instanceof ReportingErrorStateNode) {
 				ReportingErrorStateNode errorStateNode = (ReportingErrorStateNode) stateNode;
@@ -228,7 +238,9 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	}
 
 	private void onAddedTypestateChange(Statement curr, State stateNode) {
+		LOGGER.info("onAddedTypestateChange method started : {}", spec.getRule());
 		for (CrySLPredicate predToBeEnsured : spec.getRule().getPredicates()) {
+			LOGGER.info("predToBeEnsured : {}", predToBeEnsured);
 			if (predToBeEnsured.isNegated()) {
 				continue;
 			}
@@ -240,9 +252,11 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	}
 
 	private void ensuresPred(CrySLPredicate predToBeEnsured, Statement currStmt, State stateNode) {
+		LOGGER.info("ensuresPred method started : {}", currStmt);
 		if (predToBeEnsured.isNegated()) {
 			return;
 		}
+		LOGGER.info("check constraint system");
 		boolean satisfiesConstraintSytem = checkConstraintSystem();
 		if(predToBeEnsured.getConstraint() != null) {
 			ArrayList<ISLConstraint> temp = new ArrayList<>();
@@ -304,6 +318,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 			Type baseType = accessGraph.value().getType();
 			if (baseType instanceof RefType) {
 				RefType refType = (RefType) baseType;
+				LOGGER.info("rule class name :{}", spec.getRule().getClassName());
 				if (spec.getRule().getClassName().equals(refType.getSootClass().getName()) || spec.getRule().getClassName().equals(refType.getSootClass().getShortName())) {
 					if (satisfiesConstraintSytem) {
 						AnalysisSeedWithSpecification seed = cryptoScanner.getOrCreateSeedWithSpec(new AnalysisSeedWithSpecification(cryptoScanner, currStmt, accessGraph, spec));
@@ -363,6 +378,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 	}
 
 	private boolean checkConstraintSystem() {
+		LOGGER.info("checkConstraintSystem method called");
 		cryptoScanner.getAnalysisListener().beforePredicateCheck(this);
 		Set<ISLConstraint> relConstraints = constraintSolver.getRelConstraints();
 		boolean checkPredicates = checkPredicates(relConstraints);
@@ -380,6 +396,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 				requiredPredicates.add(con);
 			}
 		}
+		LOGGER.info("required predicates :{}", requiredPredicates);
 		Set<ISLConstraint> remainingPredicates = Sets.newHashSet(requiredPredicates);
 		missingPredicates.removeAll(remainingPredicates);
 
@@ -441,7 +458,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 
 			}
 		}
-
+		LOGGER.info("remaining predicates : {}", remainingPredicates);
 		for (ISLConstraint rem : Lists.newArrayList(remainingPredicates)) {
 			if (rem instanceof RequiredCrySLPredicate) {
 				RequiredCrySLPredicate singlePred = (RequiredCrySLPredicate) rem;
@@ -462,6 +479,7 @@ public class AnalysisSeedWithSpecification extends IAnalysisSeed {
 
 	private boolean evaluatePredCond(CrySLPredicate pred) {
 		final ISLConstraint conditional = pred.getConstraint();
+		LOGGER.info("evaluatePredCond conditional : {}", conditional);
 		if (conditional != null) {
 			EvaluableConstraint evalCons = constraintSolver.createConstraint(conditional);
 			evalCons.evaluate();

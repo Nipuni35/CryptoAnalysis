@@ -88,7 +88,9 @@ public class ConstraintSolver {
 		this.parameterAnalysisQuerySites = object.getParameterAnalysis().getAllQuerySites();
 		this.collectedCalls = collectedCalls;
 		this.allConstraints = this.classSpec.getRule().getConstraints();
+		LOGGER.info("all cons : {}", this.classSpec.getRule());
 		for (ISLConstraint cons : allConstraints) {
+//			LOGGER.info("constraint solver cons: {}", cons.getLocation());
 
 			Set<String> involvedVarNames = cons.getInvolvedVarNames();
 			for (CallSiteWithParamIndex cwpi : this.parameterAnalysisQuerySites) {
@@ -277,6 +279,7 @@ public class ConstraintSolver {
 		private void handlePredefinedNames(CrySLPredicate pred) {
 
 			List<ICrySLPredicateParameter> parameters = pred.getParameters();
+			LOGGER.info("parameters : {}", parameters);
 			switch (pred.getPredName()) {
 				case "callTo":
 					List<ICrySLPredicateParameter> predMethods = parameters;
